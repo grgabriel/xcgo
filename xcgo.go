@@ -64,9 +64,9 @@ func callApi() string {
 	return json
 }
 
-// Calculate the exchange. Returns a float64 value
+// Calculate the exchange. Prints calculated value
 // If the cache file does not exist, call the API for data and make a new one
-// If the cache file is older than one day, make a new one
+// If the cache file is older than one day, call API and make a new one
 func getExchange(cur string, val float64) {
 	// try to open cache file
 	f, err := os.ReadFile(jsonCache)
@@ -116,6 +116,7 @@ func getExchange(cur string, val float64) {
 
 }
 
+// Check if givenDate is yesterday
 func isYesterday(givenDate string) bool {
 	t, err := time.Parse("2006-01-02 15:04:05", givenDate)
 	if err != nil {
