@@ -37,15 +37,14 @@ func check(err error) {
 	}
 }
 
-// Load the API key from file
+// Load the API key from file and return as string
 func loadApi() string {
 	key, err := os.ReadFile(apiKeyFile)
 	if err != nil {
-		panic("Cannot load API key")
+		fmt.Println("Cannot load API key")
+		panic(err)
 	}
-	keyText := string(key)
-	keyText = strings.ReplaceAll(keyText, "\n", "")
-	return keyText 
+	return strings.ReplaceAll(string(key), "\n", "")
 }
 
 // Get current exchange data from API. Returns a JSON string
@@ -87,9 +86,11 @@ func getExchange(cur string, val float64) {
 			fmt.Println("Error parsing JSON!")
 			panic(err)
 		}
-		timeStr := resp.Metadata.LastUpdate
-		timeStr = strings.ReplaceAll(timeStr, "T", " ")
-		timeStr = strings.ReplaceAll(timeStr, "Z", "")
+		
+		// Transform "2024-05-15T16:04:30Z" into "2024-05-15 16:04:30"
+		timeStr := strings.ReplaceAll(strings.ReplaceAll(resp.Metadata.LastUpdate, "Z", ""), "T", " ")
+		// Check if the cache update is latest
+		// Cache is updated every day at 23:59:59 so the latest is always yesterday
 		if !isYesterday(timeStr) {
 			fmt.Println("Cache out of date. Updating")
 			str = callApi()
@@ -98,18 +99,14 @@ func getExchange(cur string, val float64) {
 				panic(ferr)
 			}
 		}
-		
-		
 
-
-		if cur == "p" {
+		// make maths
+		if cur == "p" { // we're given £, convert to €
 			e := val * resp.Coindata.EUR.Value
 			fmt.Println("Pound conversion: ", val, "£ is ", e, "€")
-		} else if cur == "e" {
+		} else if cur == "e" { // we're given €, convert to £
 			p := val / resp.Coindata.EUR.Value
 			fmt.Println("Pound conversion: ", val, "€ is ", p, "£")
-		} else {
-			fmt.Println("Invalid argument given")
 		}
 		
 	}
@@ -130,15 +127,18 @@ func isYesterday(givenDate string) bool {
 
 func main() {
 
+	// parse flags
+	// usage is xcgo -c e|p -v 123.45
 	cur := flag.String("c", "p", "Currency, p or e")
 	val := flag.Float64("v", 1.0, "Value to convert")
 	flag.Parse()
 
 	if *cur != "p" && *cur != "e" {
-		panic("Invalid currency option. Options: p|e")
+		fmt.Println("Invalid argument.")
+		fmt.Println("Usage: xce -c e|p -v 123.45")
+		fmt.Println("	e: convert Euro to Pound\n	p: convert Pound to Euro")
+	}else {
+		getExchange(*cur, *val)	
 	}
-
-	getExchange(*cur, *val)	
-
 }
 
