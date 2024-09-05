@@ -16,6 +16,7 @@ const apiKeyFile string = "/home/corian/.config/exchange/api.key"
 // the cache will be created if it does not exist
 const jsonCache string = "/home/corian/.config/exchange/exchange.json"
 
+var exchangeData = JsonResponse {}
 
 // Structure to store the JSON response from the api
 type JsonResponse struct {
@@ -48,8 +49,8 @@ func loadApi() string {
 }
 
 // Get current exchange data from API. Returns a JSON string
-func callApi() string {
-	apiKey := loadApi()
+func callApi() {
+ 	apiKey := loadApi()
 	api := "https://api.currencyapi.com/v3/latest?apikey=" + apiKey + "&currencies=EUR&base_currency=GBP"
 	
 	resp, err := http.Get(api)
@@ -60,57 +61,46 @@ func callApi() string {
 	for scanner.Scan() {
 		json += scanner.Text()
 	}
-	return json
+
+	setExchange(json)
+
 }
 
-// Calculate the exchange. Prints calculated value
+
+// Populate exchangeData with json data from jsonData string
+func setExchange(jsonData string) {
+	err := json.Unmarshal([]byte(jsonData), &exchangeData)
+	if err != nil {
+		fmt.Println("Error parsing JSON data!")
+		panic(err)
+	}
+}
+
+// Populate the exchange data
 // If the cache file does not exist, call the API for data and make a new one
 // If the cache file is older than one day, call API and make a new one
 func getExchange(cur string, val float64) {
+
 	// try to open cache file
 	f, err := os.ReadFile(jsonCache)
-	str := ""
+	
 	// file does not exist, call api and make new file
 	if err != nil {
 		fmt.Println("Cache file not found. Loading API")
-		str = callApi()
-		ferr := os.WriteFile(jsonCache, []byte(str), 0644)
-		if ferr != nil {
-			panic("Could not write new json file!")
-		}
+		callApi()
 	}else{
-		str = string(f)
-		resp := JsonResponse {}
-		err := json.Unmarshal([]byte(str), &resp)
-		if err != nil {
-			fmt.Println("Error parsing JSON!")
-			panic(err)
-		}
+		setExchange(string(f))	
 		
 		// Transform "2024-05-15T16:04:30Z" into "2024-05-15 16:04:30"
-		timeStr := strings.ReplaceAll(strings.ReplaceAll(resp.Metadata.LastUpdate, "Z", ""), "T", " ")
+		timeStr := strings.ReplaceAll(strings.ReplaceAll(exchangeData.Metadata.LastUpdate, "Z", ""), "T", " ")
+		
 		// Check if the cache update is latest
 		// Cache is updated every day at 23:59:59 so the latest is always yesterday
 		if !isYesterday(timeStr) {
 			fmt.Println("Cache out of date. Updating")
-			str = callApi()
-			ferr := os.WriteFile(jsonCache, []byte(str), 0644)
-			if ferr != nil {
-				panic(ferr)
-			}
+			callApi()
 		}
-
-		// make maths
-		if cur == "p" { // we're given £, convert to €
-			e := val * resp.Coindata.EUR.Value
-			fmt.Println("Pound conversion: ", val, "£ is ", e, "€")
-		} else if cur == "e" { // we're given €, convert to £
-			p := val / resp.Coindata.EUR.Value
-			fmt.Println("Pound conversion: ", val, "€ is ", p, "£")
-		}
-		
 	}
-
 }
 
 // Check if givenDate is yesterday
@@ -129,16 +119,30 @@ func main() {
 
 	// parse flags
 	// usage is xcgo -c e|p -v 123.45
+
 	cur := flag.String("c", "p", "Currency, p or e")
 	val := flag.Float64("v", 1.0, "Value to convert")
 	flag.Parse()
+	
+	calc := 0.0
 
 	if *cur != "p" && *cur != "e" {
 		fmt.Println("Invalid argument.")
 		fmt.Println("Usage: xce -c e|p -v 123.45")
 		fmt.Println("	e: convert Euro to Pound\n	p: convert Pound to Euro")
 	}else {
-		getExchange(*cur, *val)	
+		getExchange(*cur, *val)
+		switch *cur {
+			case "p":
+				calc = exchangeData.Coindata.EUR.Value * *val
+				fmt.Println(*val, "£ is ", calc, "€")
+			case "e":
+				calc = *val / exchangeData.Coindata.EUR.Value
+				fmt.Println(*val, "€ is ", calc, "£")
+			default:
+				panic("how did you get here")
+		}
+		
 	}
 }
 
