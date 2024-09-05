@@ -61,7 +61,11 @@ func callApi() {
 	for scanner.Scan() {
 		json += scanner.Text()
 	}
-
+	ferr := os.WriteFile(jsonCache, []byte(json), 0644)
+	if ferr != nil {
+		fmt.Println("Cannot write exchange file.")
+		panic(err)
+	}
 	setExchange(json)
 
 }
